@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Free Text-to-Speech</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="card">
+    <h1>Text to Speech</h1>
+    <p class="subtitle">Paste text or upload a .txt file, pick a voice, and generate an MP3 — free.</p>
+
+    <label for="file-input" class="file-label">Upload a .txt file (optional)</label>
+    <input type="file" id="file-input" accept=".txt">
+
+    <label for="text-input">Text</label>
+    <textarea id="text-input" rows="10" placeholder="Paste your text here..."></textarea>
+
+    <div id="duration-estimate" class="estimate"></div>
+    <div id="length-warning" class="warning" hidden></div>
+
+    <label for="voice-select">Voice</label>
+    <div class="voice-row">
+      <select id="voice-select">
+        {% for group_name, group_voices in voice_groups.items() %}
+        <optgroup label="{{ group_name }}">
+          {% for value, label in group_voices.items() %}
+          <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </optgroup>
+        {% endfor %}
+      </select>
+      <button id="preview-btn" type="button">▶ Preview</button>
+    </div>
+    <audio id="preview-player" hidden></audio>
+
+    <button id="generate-btn">Generate</button>
+
+    <div id="progress-container" hidden>
+      <div class="progress-bar">
+        <div id="progress-fill"></div>
+      </div>
+      <div class="progress-row">
+        <span id="progress-label">Generating... 0%</span>
+        <button id="cancel-btn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="cancelled-message" class="notice" hidden>Generation cancelled.</div>
+
+    <div id="error-message" class="error" hidden></div>
+
+    <div id="result" hidden>
+      <audio id="player" controls></audio>
+      <a id="download-link" download="speech.mp3">Download MP3</a>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
