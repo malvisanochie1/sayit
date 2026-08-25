@@ -89,7 +89,7 @@ VOICES = {
 }
 
 FILENAME_PATTERN = re.compile(r"^[a-f0-9]{32}\.mp3$")
-OPENVOICE_SPACE_URL = "https://myshell-ai-openvoicev2.hf.space"
+OPENVOICE_SPACE_URL = "myshell-ai/OpenVoiceV2"
 OPENVOICE_FN_INDEX = 1
 OPENVOICE_STYLES = {
     "en_us": "English (US)",
