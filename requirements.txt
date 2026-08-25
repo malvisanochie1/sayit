@@ -1,6 +1,5 @@
 flask
 edge-tts
 gunicorn
-gradio_client
+gradio_client==2.6.1
 cloudinary
-websockets<13.0
