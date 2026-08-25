@@ -1,3 +1,5 @@
 flask
 edge-tts
 gunicorn
+gradio_client
+cloudinary

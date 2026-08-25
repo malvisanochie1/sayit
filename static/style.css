@@ -6,7 +6,7 @@ body {
   margin: 0;
   min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: #f2f3f5;
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -25,6 +25,11 @@ body {
 h1 {
   margin: 0 0 4px;
   font-size: 24px;
+}
+
+h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
 }
 
 .subtitle {
@@ -131,6 +136,13 @@ button:disabled {
   transition: width 0.2s ease;
 }
 
+#clone-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #7c3aed;
+  transition: width 0.2s ease;
+}
+
 .progress-row {
   margin-top: 8px;
   display: flex;
@@ -204,4 +216,82 @@ button:disabled {
   text-decoration: none;
   font-weight: 600;
   font-size: 14px;
+}
+
+
+.section-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 28px 0;
+}
+
+.clone-section {
+  width: 100%;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.35;
+}
+
+.checkbox-row input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.clone-progress-label {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #666;
+}
+
+.secondary-button {
+  margin-top: 10px;
+  background: #fff;
+  color: #2563eb;
+  border: 1px solid #2563eb;
+}
+
+#clone-result {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#clone-player {
+  width: 100%;
+}
+
+#clone-download-link {
+  display: inline-block;
+  text-align: center;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #7c3aed;
+  color: #6d28d9;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+@media (max-width: 520px) {
+  body {
+    padding: 12px;
+  }
+
+  .card {
+    padding: 22px;
+  }
+
+  .voice-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #preview-btn {
+    width: 100%;
+  }
 }

@@ -55,6 +55,63 @@
       <audio id="player" controls></audio>
       <a id="download-link" download="speech.mp3">Download MP3</a>
     </div>
+
+    <div class="section-divider"></div>
+
+    <section class="clone-section" aria-labelledby="clone-title">
+      <h2 id="clone-title">Clone Your Voice</h2>
+      <p class="subtitle">Upload a 5-30 second voice sample, enter a short line, and generate cloned speech.</p>
+
+      <label for="clone-audio-input">Voice sample</label>
+      <input
+        type="file"
+        id="clone-audio-input"
+        accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac"
+      >
+      <div class="estimate">Your reference sample is deleted after the cloning request finishes.</div>
+
+      <label class="checkbox-row" for="clone-consent">
+        <input type="checkbox" id="clone-consent">
+        I have permission to use this voice sample.
+      </label>
+
+      <label for="clone-text-input">Text for cloned voice</label>
+      <textarea id="clone-text-input" rows="5" placeholder="Enter one or two short sentences..."></textarea>
+      <div id="clone-text-estimate" class="estimate"></div>
+
+      <label for="clone-style-select">Language/style</label>
+      <select id="clone-style-select">
+        <option value="en_us">English (US)</option>
+        <option value="en_default">English (Default)</option>
+        <option value="en_br">English (British)</option>
+        <option value="en_au">English (Australian)</option>
+        <option value="en_in">English (Indian)</option>
+        <option value="es_default">Spanish</option>
+        <option value="fr_default">French</option>
+        <option value="jp_default">Japanese</option>
+        <option value="zh_default">Chinese</option>
+        <option value="kr_default">Korean</option>
+      </select>
+
+      <button id="clone-generate-btn">Generate cloned voice</button>
+
+      <div id="clone-progress-container" hidden>
+        <div class="progress-bar">
+          <div id="clone-progress-fill"></div>
+        </div>
+        <div id="clone-progress-label" class="clone-progress-label">
+          Cloning your voice... this can take up to a couple of minutes
+        </div>
+      </div>
+
+      <div id="clone-error-message" class="error" hidden></div>
+      <button id="clone-retry-btn" class="secondary-button" hidden>Something went wrong, tap to retry</button>
+
+      <div id="clone-result" hidden>
+        <audio id="clone-player" controls></audio>
+        <a id="clone-download-link" download="cloned-voice.mp3">Download cloned audio</a>
+      </div>
+    </section>
   </div>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>

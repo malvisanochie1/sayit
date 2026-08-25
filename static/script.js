@@ -15,13 +15,31 @@ const cancelBtn = document.getElementById("cancel-btn");
 const cancelledMessage = document.getElementById("cancelled-message");
 const previewBtn = document.getElementById("preview-btn");
 const previewPlayer = document.getElementById("preview-player");
+const cloneAudioInput = document.getElementById("clone-audio-input");
+const cloneTextInput = document.getElementById("clone-text-input");
+const cloneStyleSelect = document.getElementById("clone-style-select");
+const cloneConsent = document.getElementById("clone-consent");
+const cloneGenerateBtn = document.getElementById("clone-generate-btn");
+const cloneTextEstimate = document.getElementById("clone-text-estimate");
+const cloneProgressContainer = document.getElementById("clone-progress-container");
+const cloneProgressFill = document.getElementById("clone-progress-fill");
+const cloneProgressLabel = document.getElementById("clone-progress-label");
+const cloneErrorMessage = document.getElementById("clone-error-message");
+const cloneRetryBtn = document.getElementById("clone-retry-btn");
+const cloneResultEl = document.getElementById("clone-result");
+const clonePlayer = document.getElementById("clone-player");
+const cloneDownloadLink = document.getElementById("clone-download-link");
 
 const WORDS_PER_MINUTE = 140;
 const WARNING_THRESHOLD_MINUTES = 6;
 const POLL_INTERVAL_MS = 500;
+const CLONE_POLL_INTERVAL_MS = 1000;
+const CLONE_MAX_WORDS = 50;
 
 let currentJobId = null;
 let pollTimer = null;
+let currentCloneJobId = null;
+let clonePollTimer = null;
 
 function formatDuration(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -72,6 +90,23 @@ fileInput.addEventListener("change", () => {
 });
 
 textInput.addEventListener("input", updateEstimate);
+
+function updateCloneEstimate() {
+  const text = cloneTextInput.value.trim();
+  const wordCount = text ? text.split(/\s+/).filter(Boolean).length : 0;
+
+  if (wordCount === 0) {
+    cloneTextEstimate.textContent = "";
+    return;
+  }
+
+  cloneTextEstimate.textContent = `${wordCount}/${CLONE_MAX_WORDS} words`;
+  if (wordCount > CLONE_MAX_WORDS) {
+    cloneTextEstimate.textContent += " - shorten this before cloning.";
+  }
+}
+
+cloneTextInput.addEventListener("input", updateCloneEstimate);
 
 function showError(message) {
   errorMessage.textContent = message;
@@ -241,3 +276,141 @@ cancelBtn.addEventListener("click", async () => {
     // Polling will keep running and surface any resulting state; nothing else to do here.
   }
 });
+
+
+function showCloneError(message, allowRetry = true) {
+  cloneErrorMessage.textContent = message;
+  cloneErrorMessage.hidden = false;
+  cloneRetryBtn.hidden = !allowRetry;
+}
+
+function hideCloneError() {
+  cloneErrorMessage.hidden = true;
+  cloneRetryBtn.hidden = true;
+}
+
+function stopClonePolling() {
+  if (clonePollTimer) {
+    clearTimeout(clonePollTimer);
+    clonePollTimer = null;
+  }
+}
+
+function resetCloneToIdle() {
+  stopClonePolling();
+  currentCloneJobId = null;
+  cloneProgressContainer.hidden = true;
+  cloneProgressFill.style.width = "0%";
+  cloneGenerateBtn.hidden = false;
+  cloneGenerateBtn.disabled = false;
+  cloneGenerateBtn.textContent = "Generate cloned voice";
+}
+
+function getCloneWordCount() {
+  const text = cloneTextInput.value.trim();
+  return text ? text.split(/\s+/).filter(Boolean).length : 0;
+}
+
+function validateCloneInputs() {
+  if (!cloneAudioInput.files.length) {
+    showCloneError("Please upload a short voice sample first.", false);
+    return false;
+  }
+
+  if (!cloneConsent.checked) {
+    showCloneError("Please confirm you have permission to use this voice sample.", false);
+    return false;
+  }
+
+  if (!cloneTextInput.value.trim()) {
+    showCloneError("Please enter the text you want to hear in the cloned voice.", false);
+    return false;
+  }
+
+  if (getCloneWordCount() > CLONE_MAX_WORDS) {
+    showCloneError("Please keep cloned-voice text to 50 words or fewer.", false);
+    return false;
+  }
+
+  return true;
+}
+
+async function pollCloneStatus() {
+  if (!currentCloneJobId) return;
+
+  let data;
+  try {
+    const response = await fetch(`/clone-status/${currentCloneJobId}`);
+    data = await response.json();
+  } catch (err) {
+    resetCloneToIdle();
+    showCloneError("Lost connection while cloning. Something went wrong, tap to retry.");
+    return;
+  }
+
+  if (data.status === "running") {
+    cloneProgressFill.style.width = `${data.progress || 5}%`;
+    cloneProgressLabel.textContent =
+      data.message || "Cloning your voice... this can take up to a couple of minutes";
+    clonePollTimer = setTimeout(pollCloneStatus, CLONE_POLL_INTERVAL_MS);
+    return;
+  }
+
+  if (data.status === "done") {
+    resetCloneToIdle();
+    clonePlayer.src = data.audio_url;
+    cloneDownloadLink.href = data.audio_url;
+    cloneResultEl.hidden = false;
+    return;
+  }
+
+  if (data.status === "error") {
+    resetCloneToIdle();
+    showCloneError(data.error || "Something went wrong, tap to retry.");
+  }
+}
+
+async function startCloneJob() {
+  hideCloneError();
+  cloneResultEl.hidden = true;
+  updateCloneEstimate();
+
+  if (!validateCloneInputs()) {
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("audio", cloneAudioInput.files[0]);
+  formData.append("text", cloneTextInput.value.trim());
+  formData.append("style", cloneStyleSelect.value);
+  formData.append("consent", "true");
+
+  cloneGenerateBtn.hidden = true;
+  cloneProgressContainer.hidden = false;
+  cloneProgressFill.style.width = "5%";
+  cloneProgressLabel.textContent =
+    "Cloning your voice... this can take up to a couple of minutes";
+
+  try {
+    const response = await fetch("/clone-voice", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      resetCloneToIdle();
+      showCloneError(data.error || "Something went wrong, tap to retry.", response.status >= 500);
+      return;
+    }
+
+    currentCloneJobId = data.job_id;
+    pollCloneStatus();
+  } catch (err) {
+    resetCloneToIdle();
+    showCloneError("Couldn't reach the server. Something went wrong, tap to retry.");
+  }
+}
+
+cloneGenerateBtn.addEventListener("click", startCloneJob);
+cloneRetryBtn.addEventListener("click", startCloneJob);
