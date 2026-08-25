@@ -11,9 +11,11 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.utils
 import edge_tts
+import logging
+
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from gradio_client import Client
-
+logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
@@ -417,6 +419,7 @@ def _run_clone_job(job_id: str, text: str, style: str, reference_path: str) -> N
             message="Done",
         )
     except Exception as exc:
+        logging.exception("Clone job failed")
         _set_clone_job(
             job,
             status="error",
