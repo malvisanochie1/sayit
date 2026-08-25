@@ -3,3 +3,4 @@ edge-tts
 gunicorn
 gradio_client
 cloudinary
+websockets<13.0
