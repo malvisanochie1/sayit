@@ -3,14 +3,30 @@ import os
 import re
 import threading
 import uuid
+from datetime import timedelta
 
 import edge_tts
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    render_template,
+    request,
+    send_from_directory,
+    session,
+)
+
+import custom_voice
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", os.urandom(32))
+app.permanent_session_lifetime = timedelta(days=365)
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10MB, plenty for a short voice sample
 
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+CUSTOM_VOICE_PREFIX = "custom:"
 
 VOICE_GROUPS = {
     "US — Multilingual (most natural)": {
@@ -82,6 +98,7 @@ VOICES = {
 }
 
 FILENAME_PATTERN = re.compile(r"^[a-f0-9]{32}\.mp3$")
+VOICE_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 
 # Rough estimate used only to drive the progress bar (not exact):
 # edge-tts's neural voices produce audio at roughly 48kbps.
@@ -90,6 +107,15 @@ ESTIMATED_BYTES_PER_SECOND = 6000
 
 JOBS = {}
 JOBS_LOCK = threading.Lock()
+
+
+def _session_id() -> str:
+    """Private per-browser id (signed cookie) that namespaces a person's
+    custom voices in Cloudinary so no one else can see or use them."""
+    if "cv_session" not in session:
+        session["cv_session"] = uuid.uuid4().hex
+        session.permanent = True
+    return session["cv_session"]
 
 
 def _estimate_total_bytes(text: str) -> int:
@@ -131,6 +157,29 @@ def _run_job(job_id: str, text: str, voice: str, out_path: str) -> None:
         job["audio_url"] = f"/audio/{os.path.basename(out_path)}"
 
 
+def _run_custom_job(job_id: str, session_id: str, voice_id: str, text: str, out_path: str) -> None:
+    job = JOBS[job_id]
+    try:
+        custom_voice.clone_speech(session_id, voice_id, text, job, out_path)
+    except custom_voice.CustomVoiceError as exc:
+        job["status"] = "error"
+        job["error"] = str(exc)
+        _cleanup_file(out_path)
+        return
+    except Exception:
+        job["status"] = "error"
+        job["error"] = "Voice cloning failed unexpectedly — please try again."
+        _cleanup_file(out_path)
+        return
+
+    if job["status"] == "cancelling" or job["cancel_event"].is_set():
+        job["status"] = "cancelled"
+        _cleanup_file(out_path)
+    elif job["status"] != "error":
+        job["status"] = "done"
+        job["audio_url"] = f"/audio/{os.path.basename(out_path)}"
+
+
 def _cleanup_file(path: str) -> None:
     try:
         if os.path.exists(path):
@@ -152,26 +201,41 @@ def synthesize():
     if not text:
         return jsonify({"error": "Please enter some text first."}), 400
 
-    if voice not in VOICES:
+    is_custom = voice.startswith(CUSTOM_VOICE_PREFIX)
+    if not is_custom and voice not in VOICES:
         return jsonify({"error": "Please choose a valid voice."}), 400
 
     job_id = uuid.uuid4().hex
     filename = f"{job_id}.mp3"
     out_path = os.path.join(OUTPUT_DIR, filename)
 
+    if is_custom:
+        voice_id = voice[len(CUSTOM_VOICE_PREFIX):]
+        session_id = _session_id()
+        estimated_total_bytes = custom_voice.estimate_total_bytes(text)
+    else:
+        estimated_total_bytes = _estimate_total_bytes(text)
+
     with JOBS_LOCK:
         JOBS[job_id] = {
             "status": "running",
             "bytes_written": 0,
-            "estimated_total_bytes": _estimate_total_bytes(text),
+            "estimated_total_bytes": estimated_total_bytes,
             "cancel_event": threading.Event(),
             "audio_url": None,
             "error": None,
         }
 
-    thread = threading.Thread(
-        target=_run_job, args=(job_id, text, voice, out_path), daemon=True
-    )
+    if is_custom:
+        thread = threading.Thread(
+            target=_run_custom_job,
+            args=(job_id, session_id, voice_id, text, out_path),
+            daemon=True,
+        )
+    else:
+        thread = threading.Thread(
+            target=_run_job, args=(job_id, text, voice, out_path), daemon=True
+        )
     thread.start()
 
     return jsonify({"job_id": job_id}), 202
@@ -209,6 +273,68 @@ def cancel(job_id):
         job["cancel_event"].set()
 
     return jsonify({"ok": True})
+
+
+@app.route("/custom-voice/list")
+def custom_voice_list():
+    try:
+        voices = custom_voice.list_voices(_session_id())
+    except custom_voice.CustomVoiceError as exc:
+        return jsonify({"error": str(exc)}), 503
+    return jsonify({"voices": voices})
+
+
+@app.route("/custom-voice/add", methods=["POST"])
+def custom_voice_add():
+    name = (request.form.get("name") or "").strip()
+    sample = request.files.get("sample")
+
+    if not name:
+        return jsonify({"error": "Please give this voice a name."}), 400
+    if sample is None or sample.filename == "":
+        return jsonify({"error": "Please provide a voice sample recording."}), 400
+
+    voice_id = uuid.uuid4().hex
+    try:
+        record = custom_voice.add_voice(_session_id(), voice_id, name, sample)
+    except custom_voice.CustomVoiceError as exc:
+        return jsonify({"error": str(exc)}), 503
+    except Exception:
+        return jsonify({"error": "Couldn't save that voice sample — please try again."}), 500
+
+    return jsonify({"voice": record}), 201
+
+
+@app.route("/custom-voice/delete/<voice_id>", methods=["POST"])
+def custom_voice_delete(voice_id):
+    if not VOICE_ID_PATTERN.match(voice_id):
+        return jsonify({"error": "Invalid voice id."}), 400
+
+    try:
+        deleted = custom_voice.delete_voice(_session_id(), voice_id)
+    except custom_voice.CustomVoiceError as exc:
+        return jsonify({"error": str(exc)}), 503
+
+    if not deleted:
+        return jsonify({"error": "Voice not found."}), 404
+    return jsonify({"ok": True})
+
+
+@app.route("/custom-voice/sample/<voice_id>")
+def custom_voice_sample(voice_id):
+    if not VOICE_ID_PATTERN.match(voice_id):
+        return jsonify({"error": "Invalid voice id."}), 400
+
+    try:
+        result = custom_voice.get_sample_bytes(_session_id(), voice_id)
+    except custom_voice.CustomVoiceError as exc:
+        return jsonify({"error": str(exc)}), 503
+
+    if result is None:
+        return jsonify({"error": "Voice not found."}), 404
+
+    audio_bytes, audio_format = result
+    return Response(audio_bytes, mimetype=f"audio/{audio_format}")
 
 
 @app.route("/audio/<filename>")

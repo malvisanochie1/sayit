@@ -30,6 +30,7 @@
           {% endfor %}
         </optgroup>
         {% endfor %}
+        <optgroup id="custom-voice-group" label="My Custom Voices" hidden></optgroup>
       </select>
       <button id="preview-btn" type="button">▶ Preview</button>
     </div>
@@ -54,6 +55,29 @@
     <div id="result" hidden>
       <audio id="player" controls></audio>
       <a id="download-link" download="speech.mp3">Download MP3</a>
+    </div>
+
+    <hr>
+
+    <div class="custom-voice-section">
+      <h2>My Custom Voices</h2>
+      <p class="subtitle">Clone your own voice for free — private to this browser and saved in the cloud so it's still here next time.</p>
+
+      <label for="custom-voice-name">Voice name</label>
+      <input type="text" id="custom-voice-name" placeholder="e.g. My Voice" maxlength="40">
+
+      <label for="custom-voice-file">Upload a sample (10–30s of clear speech), or record one</label>
+      <div class="custom-voice-capture-row">
+        <input type="file" id="custom-voice-file" accept="audio/*">
+        <button id="record-btn" type="button">🎙 Record</button>
+      </div>
+      <div id="record-status" class="notice" hidden></div>
+
+      <button id="save-voice-btn" type="button" disabled>Save Voice</button>
+
+      <div id="custom-voice-error" class="error" hidden></div>
+
+      <ul id="custom-voice-list" class="custom-voice-list"></ul>
     </div>
   </div>
 

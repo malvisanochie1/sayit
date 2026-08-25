@@ -19,6 +19,7 @@ const previewPlayer = document.getElementById("preview-player");
 const WORDS_PER_MINUTE = 140;
 const WARNING_THRESHOLD_MINUTES = 6;
 const POLL_INTERVAL_MS = 500;
+const CUSTOM_VOICE_PREFIX = "custom:";
 
 let currentJobId = null;
 let pollTimer = null;
@@ -191,6 +192,13 @@ function resetPreviewButton() {
   previewBtn.disabled = false;
 }
 
+function sampleUrlForVoice(voiceValue) {
+  if (voiceValue.startsWith(CUSTOM_VOICE_PREFIX)) {
+    return `/custom-voice/sample/${voiceValue.slice(CUSTOM_VOICE_PREFIX.length)}`;
+  }
+  return `/static/voice_samples/${voiceValue}.mp3`;
+}
+
 previewBtn.addEventListener("click", () => {
   const isPlayingThisVoice =
     !previewPlayer.paused && previewPlayer.dataset.voice === voiceSelect.value;
@@ -203,7 +211,7 @@ previewBtn.addEventListener("click", () => {
 
   previewPlayer.pause();
   previewPlayer.dataset.voice = voiceSelect.value;
-  previewPlayer.src = `/static/voice_samples/${voiceSelect.value}.mp3`;
+  previewPlayer.src = sampleUrlForVoice(voiceSelect.value);
   previewBtn.textContent = "⏸ Playing...";
   previewPlayer.play().catch(() => {
     resetPreviewButton();
@@ -241,3 +249,193 @@ cancelBtn.addEventListener("click", async () => {
     // Polling will keep running and surface any resulting state; nothing else to do here.
   }
 });
+
+// --- Custom voice cloning ---
+
+const customVoiceNameInput = document.getElementById("custom-voice-name");
+const customVoiceFileInput = document.getElementById("custom-voice-file");
+const recordBtn = document.getElementById("record-btn");
+const recordStatus = document.getElementById("record-status");
+const saveVoiceBtn = document.getElementById("save-voice-btn");
+const customVoiceErrorEl = document.getElementById("custom-voice-error");
+const customVoiceListEl = document.getElementById("custom-voice-list");
+const customVoiceGroup = document.getElementById("custom-voice-group");
+
+let recordedBlob = null;
+let mediaRecorder = null;
+let mediaChunks = [];
+
+function showCustomVoiceError(message) {
+  customVoiceErrorEl.textContent = message;
+  customVoiceErrorEl.hidden = false;
+}
+
+function hideCustomVoiceError() {
+  customVoiceErrorEl.hidden = true;
+}
+
+function updateSaveVoiceEnabled() {
+  const hasName = customVoiceNameInput.value.trim().length > 0;
+  const hasSample = Boolean(recordedBlob || customVoiceFileInput.files[0]);
+  saveVoiceBtn.disabled = !(hasName && hasSample);
+}
+
+customVoiceNameInput.addEventListener("input", updateSaveVoiceEnabled);
+customVoiceFileInput.addEventListener("change", () => {
+  if (customVoiceFileInput.files[0]) {
+    recordedBlob = null;
+    recordStatus.hidden = true;
+  }
+  updateSaveVoiceEnabled();
+});
+
+recordBtn.addEventListener("click", async () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    return;
+  }
+
+  hideCustomVoiceError();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) mediaChunks.push(e.data);
+    };
+    mediaRecorder.onstop = () => {
+      recordedBlob = new Blob(mediaChunks, { type: "audio/webm" });
+      customVoiceFileInput.value = "";
+      stream.getTracks().forEach((track) => track.stop());
+      recordBtn.textContent = "🎙 Record";
+      recordStatus.hidden = false;
+      recordStatus.textContent = "Recorded — ready to save.";
+      updateSaveVoiceEnabled();
+    };
+    mediaRecorder.start();
+    recordBtn.textContent = "⏹ Stop";
+    recordStatus.hidden = false;
+    recordStatus.textContent = "Recording... speak clearly for 10-30 seconds, then click Stop.";
+  } catch (err) {
+    showCustomVoiceError(
+      "Couldn't access your microphone — check browser permissions, or upload a file instead."
+    );
+  }
+});
+
+saveVoiceBtn.addEventListener("click", async () => {
+  hideCustomVoiceError();
+  const name = customVoiceNameInput.value.trim();
+  const file = customVoiceFileInput.files[0] || recordedBlob;
+  if (!name || !file) return;
+
+  const formData = new FormData();
+  formData.append("name", name);
+  formData.append("sample", file, file.name || "sample.webm");
+
+  saveVoiceBtn.disabled = true;
+  saveVoiceBtn.textContent = "Saving...";
+
+  try {
+    const response = await fetch("/custom-voice/add", { method: "POST", body: formData });
+    const data = await response.json();
+
+    if (!response.ok) {
+      showCustomVoiceError(data.error || "Couldn't save that voice.");
+      return;
+    }
+
+    customVoiceNameInput.value = "";
+    customVoiceFileInput.value = "";
+    recordedBlob = null;
+    recordStatus.hidden = true;
+    await loadCustomVoices();
+  } catch (err) {
+    showCustomVoiceError("Couldn't reach the server — check your connection and try again.");
+  } finally {
+    saveVoiceBtn.textContent = "Save Voice";
+    updateSaveVoiceEnabled();
+  }
+});
+
+function renderCustomVoiceOptions(voices) {
+  customVoiceGroup.innerHTML = "";
+  customVoiceGroup.hidden = voices.length === 0;
+  for (const voice of voices) {
+    const option = document.createElement("option");
+    option.value = `${CUSTOM_VOICE_PREFIX}${voice.id}`;
+    option.textContent = voice.name;
+    customVoiceGroup.appendChild(option);
+  }
+}
+
+function renderCustomVoiceList(voices) {
+  customVoiceListEl.innerHTML = "";
+
+  if (voices.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "custom-voice-empty";
+    empty.textContent = "No custom voices saved yet.";
+    customVoiceListEl.appendChild(empty);
+    return;
+  }
+
+  for (const voice of voices) {
+    const item = document.createElement("li");
+    item.className = "custom-voice-item";
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "custom-voice-name";
+    nameSpan.textContent = voice.name;
+
+    const previewVoiceBtn = document.createElement("button");
+    previewVoiceBtn.type = "button";
+    previewVoiceBtn.className = "custom-voice-btn";
+    previewVoiceBtn.textContent = "▶ Preview";
+    previewVoiceBtn.addEventListener("click", () => {
+      previewPlayer.pause();
+      previewPlayer.dataset.voice = `${CUSTOM_VOICE_PREFIX}${voice.id}`;
+      previewPlayer.src = `/custom-voice/sample/${voice.id}`;
+      previewPlayer.play().catch(() => {
+        showError("Couldn't play this voice sample.");
+      });
+    });
+
+    const deleteVoiceBtn = document.createElement("button");
+    deleteVoiceBtn.type = "button";
+    deleteVoiceBtn.className = "custom-voice-btn custom-voice-delete";
+    deleteVoiceBtn.textContent = "Delete";
+    deleteVoiceBtn.addEventListener("click", async () => {
+      const confirmed = window.confirm(`Delete the voice "${voice.name}"? This can't be undone.`);
+      if (!confirmed) return;
+      try {
+        await fetch(`/custom-voice/delete/${voice.id}`, { method: "POST" });
+        await loadCustomVoices();
+      } catch (err) {
+        showCustomVoiceError("Couldn't delete that voice — check your connection and try again.");
+      }
+    });
+
+    item.appendChild(nameSpan);
+    item.appendChild(previewVoiceBtn);
+    item.appendChild(deleteVoiceBtn);
+    customVoiceListEl.appendChild(item);
+  }
+}
+
+async function loadCustomVoices() {
+  try {
+    const response = await fetch("/custom-voice/list");
+    const data = await response.json();
+    if (!response.ok) {
+      showCustomVoiceError(data.error || "Couldn't load your saved voices.");
+      return;
+    }
+    renderCustomVoiceOptions(data.voices);
+    renderCustomVoiceList(data.voices);
+  } catch (err) {
+    showCustomVoiceError("Couldn't load your saved voices — check your connection.");
+  }
+}
+
+loadCustomVoices();

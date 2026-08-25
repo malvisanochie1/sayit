@@ -205,3 +205,93 @@ button:disabled {
   font-weight: 600;
   font-size: 14px;
 }
+
+hr {
+  margin: 28px 0;
+  border: none;
+  border-top: 1px solid #e5e7eb;
+}
+
+.custom-voice-section h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.custom-voice-capture-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.custom-voice-capture-row input[type="file"] {
+  flex: 1;
+}
+
+#record-btn {
+  margin-top: 0;
+  width: auto;
+  white-space: nowrap;
+  padding: 10px 14px;
+  background: #fff;
+  color: #2563eb;
+  border: 1px solid #2563eb;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#save-voice-btn {
+  background: #16a34a;
+}
+
+#save-voice-btn:disabled {
+  background: #a7d9b8;
+}
+
+.custom-voice-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.custom-voice-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #d7d9dc;
+  border-radius: 8px;
+}
+
+.custom-voice-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-voice-btn {
+  margin-top: 0;
+  width: auto;
+  white-space: nowrap;
+  padding: 6px 12px;
+  background: #fff;
+  color: #2563eb;
+  border: 1px solid #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.custom-voice-delete {
+  color: #b3261e;
+  border-color: #b3261e;
+}
+
+.custom-voice-empty {
+  font-size: 13px;
+  color: #666;
+}
