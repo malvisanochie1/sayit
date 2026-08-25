@@ -219,4 +219,7 @@ def audio(filename):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000, threaded=True)
+    # Local development only — Render starts the app via gunicorn (see Procfile),
+    # which never executes this block, so production never runs in debug mode.
+    debug_mode = os.environ.get("FLASK_DEBUG", "1") == "1"
+    app.run(debug=debug_mode, port=5000, threaded=True)
