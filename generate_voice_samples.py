@@ -12,11 +12,11 @@ import os
 
 import edge_tts
 
-from app import VOICES
+from app import VOICES, get_voice_synthesis_options
 
 SAMPLE_TEXT = (
-    "Hi there! This is a quick preview of how this voice sounds, "
-    "so you can pick the one you like best."
+    "In the quiet hour before dawn, every shadow held its breath. "
+    "This is a storytelling preview, tuned for a deep, natural narration."
 )
 
 SAMPLES_DIR = os.path.join(
@@ -28,8 +28,11 @@ async def _generate_all() -> None:
     os.makedirs(SAMPLES_DIR, exist_ok=True)
     for voice_id, label in VOICES.items():
         out_path = os.path.join(SAMPLES_DIR, f"{voice_id}.mp3")
+        if os.path.exists(out_path):
+            print(f"Skipping existing sample for {label} ({voice_id}).")
+            continue
         print(f"Generating sample for {label} ({voice_id})...")
-        communicate = edge_tts.Communicate(SAMPLE_TEXT, voice_id)
+        communicate = edge_tts.Communicate(SAMPLE_TEXT, **get_voice_synthesis_options(voice_id))
         await communicate.save(out_path)
     print("Done.")
 

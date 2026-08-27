@@ -12,6 +12,7 @@ import cloudinary.uploader
 import cloudinary.utils
 import edge_tts
 import logging
+import concurrent.futures
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from gradio_client import Client
@@ -22,6 +23,16 @@ OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 VOICE_GROUPS = {
+    "Deep Storytelling": {
+        "story-deep-christopher": "Christopher Deep (Male Storyteller)",
+        "story-deep-guy": "Guy Deep (Male Storyteller)",
+        "story-deep-steffan": "Steffan Deep (Male Narrator)",
+        "story-deep-roger": "Roger Deep (Male Narrator)",
+        "story-very-deep-davis": "Davis Very Deep (Cinematic Storyteller)",
+        "story-very-deep-jason": "Jason Very Deep (Warm Storyteller)",
+        "story-very-deep-tony": "Tony Very Deep (Measured Narrator)",
+        "story-very-deep-david": "David Very Deep (Classic Storyteller)",
+    },
     "US — Multilingual (most natural)": {
         "en-US-AndrewMultilingualNeural": "Andrew (Male)",
         "en-US-AvaMultilingualNeural": "Ava (Female)",
@@ -90,6 +101,56 @@ VOICES = {
     for voice_id, label in group.items()
 }
 
+VOICE_SYNTHESIS_SETTINGS = {
+    "story-deep-christopher": {
+        "voice": "en-US-ChristopherNeural",
+        "rate": "-6%",
+        "pitch": "-18Hz",
+    },
+    "story-deep-guy": {
+        "voice": "en-US-GuyNeural",
+        "rate": "-5%",
+        "pitch": "-16Hz",
+    },
+    "story-deep-steffan": {
+        "voice": "en-US-SteffanNeural",
+        "rate": "-7%",
+        "pitch": "-20Hz",
+    },
+    "story-deep-roger": {
+        "voice": "en-US-RogerNeural",
+        "rate": "-5%",
+        "pitch": "-14Hz",
+    },
+    "story-very-deep-davis": {
+        "voice": "en-US-DavisNeural",
+        "rate": "-8%",
+        "pitch": "-26Hz",
+    },
+    "story-very-deep-jason": {
+        "voice": "en-US-JasonNeural",
+        "rate": "-7%",
+        "pitch": "-24Hz",
+    },
+    "story-very-deep-tony": {
+        "voice": "en-US-TonyNeural",
+        "rate": "-8%",
+        "pitch": "-28Hz",
+    },
+    "story-very-deep-david": {
+        "voice": "en-US-DavidNeural",
+        "rate": "-7%",
+        "pitch": "-24Hz",
+    },
+}
+
+
+def get_voice_synthesis_options(voice: str) -> dict:
+    settings = VOICE_SYNTHESIS_SETTINGS.get(voice)
+    if settings:
+        return settings.copy()
+    return {"voice": voice}
+
 FILENAME_PATTERN = re.compile(r"^[a-f0-9]{32}\.mp3$")
 OPENVOICE_SPACE_URL = "myshell-ai/OpenVoiceV2"
 OPENVOICE_FN_INDEX = 1
@@ -141,7 +202,7 @@ def _estimate_total_bytes(text: str) -> int:
 
 
 async def _stream_generate(job: dict, text: str, voice: str, out_path: str) -> None:
-    communicate = edge_tts.Communicate(text, voice)
+    communicate = edge_tts.Communicate(text, **get_voice_synthesis_options(voice))
     with open(out_path, "wb") as audio_file:
         async for chunk in communicate.stream():
             if job["cancel_event"].is_set():
@@ -400,7 +461,25 @@ def _friendly_clone_error(exc: Exception) -> str:
         f"Details: {_clean_space_message(message)}"
     )
 
-
+CLONE_HARD_TIMEOUT_SECONDS = 150
+def _predict_with_hard_timeout(client, text, style, reference_path):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(
+            client.predict,
+            text,
+            style,
+            reference_path,
+            True,
+            fn_index=OPENVOICE_FN_INDEX,
+        )
+        try:
+            return future.result(timeout=CLONE_HARD_TIMEOUT_SECONDS)
+        except concurrent.futures.TimeoutError:
+            raise RuntimeError(
+                "The voice model took too long to respond (over 2.5 minutes) "
+                "and was stopped."
+            )
+        
 def _run_clone_job(job_id: str, text: str, style: str, reference_path: str) -> None:
     job = CLONE_JOBS[job_id]
     cloned_audio_path = None
