@@ -28,6 +28,9 @@ VOICE_GROUPS = {
         "story-medium-brian": "Brian Style (Medium, Warm Narrator)",
         "story-not-deep-brian": "Brian Style (Not Deep, Clear Narrator)",
     },
+    "Benji Style": {
+        "benji-cheerful": "Benji Style (Cheerful, Warm, New Zealand)",
+    },
     "Deep Storytelling": {
         "story-deep-christopher": "Christopher Deep (Male Storyteller)",
         "story-deep-guy": "Guy Deep (Male Storyteller)",
@@ -107,7 +110,12 @@ VOICES = {
 }
 
 # Voices tagged "NEW" in the voice picker.
-NEW_VOICES = {"story-deep-brian", "story-medium-brian", "story-not-deep-brian"}
+NEW_VOICES = {
+    "story-deep-brian",
+    "story-medium-brian",
+    "story-not-deep-brian",
+    "benji-cheerful",
+}
 
 VOICE_SYNTHESIS_SETTINGS = {
     # Tuned against ElevenLabs' "Brian" preview: matches its median pitch
@@ -127,6 +135,14 @@ VOICE_SYNTHESIS_SETTINGS = {
         "voice": "en-US-AndrewMultilingualNeural",
         "rate": "-7%",
         "pitch": "+26Hz",
+    },
+    # Modeled on ElevenLabs' "Benji - Cheerful, Warm, and Round" (New Zealand).
+    # No public sample to measure, so tuned from the description: a brisker
+    # pace for "cheerful", slightly lower pitch for "warm, round".
+    "benji-cheerful": {
+        "voice": "en-NZ-MitchellNeural",
+        "rate": "+5%",
+        "pitch": "-4Hz",
     },
     "story-deep-christopher": {
         "voice": "en-US-ChristopherNeural",
