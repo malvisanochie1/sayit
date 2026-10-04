@@ -23,6 +23,11 @@ OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 VOICE_GROUPS = {
+    "Brian Style": {
+        "story-deep-brian": "Brian Style (Deep, Resonant Narrator)",
+        "story-medium-brian": "Brian Style (Medium, Warm Narrator)",
+        "story-not-deep-brian": "Brian Style (Not Deep, Clear Narrator)",
+    },
     "Deep Storytelling": {
         "story-deep-christopher": "Christopher Deep (Male Storyteller)",
         "story-deep-guy": "Guy Deep (Male Storyteller)",
@@ -101,7 +106,28 @@ VOICES = {
     for voice_id, label in group.items()
 }
 
+# Voices tagged "NEW" in the voice picker.
+NEW_VOICES = {"story-deep-brian", "story-medium-brian", "story-not-deep-brian"}
+
 VOICE_SYNTHESIS_SETTINGS = {
+    # Tuned against ElevenLabs' "Brian" preview: matches its median pitch
+    # (~94Hz) and speaking speed on the same sentence. Medium (~105Hz) and
+    # Not Deep (~120Hz) keep the same voice and pace, ~2 semitones apart.
+    "story-deep-brian": {
+        "voice": "en-US-AndrewMultilingualNeural",
+        "rate": "-7%",
+        "pitch": "-10Hz",
+    },
+    "story-medium-brian": {
+        "voice": "en-US-AndrewMultilingualNeural",
+        "rate": "-7%",
+        "pitch": "+5Hz",
+    },
+    "story-not-deep-brian": {
+        "voice": "en-US-AndrewMultilingualNeural",
+        "rate": "-7%",
+        "pitch": "+26Hz",
+    },
     "story-deep-christopher": {
         "voice": "en-US-ChristopherNeural",
         "rate": "-6%",
@@ -513,7 +539,9 @@ def _run_clone_job(job_id: str, text: str, style: str, reference_path: str) -> N
 
 @app.route("/")
 def index():
-    return render_template("index.html", voice_groups=VOICE_GROUPS)
+    return render_template(
+        "index.html", voice_groups=VOICE_GROUPS, new_voices=NEW_VOICES
+    )
 
 
 @app.route("/synthesize", methods=["POST"])

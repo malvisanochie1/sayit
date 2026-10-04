@@ -26,7 +26,7 @@
         {% for group_name, group_voices in voice_groups.items() %}
         <optgroup label="{{ group_name }}">
           {% for value, label in group_voices.items() %}
-          <option value="{{ value }}">{{ label }}</option>
+          <option value="{{ value }}">{% if value in new_voices %}NEW · {% endif %}{{ label }}</option>
           {% endfor %}
         </optgroup>
         {% endfor %}
