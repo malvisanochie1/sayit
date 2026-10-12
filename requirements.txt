@@ -1,5 +1,5 @@
 flask
-edge-tts
+edge-tts>=7.2.8
 gunicorn
 gradio_client==2.6.1
 cloudinary

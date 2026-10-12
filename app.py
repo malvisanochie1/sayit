@@ -11,12 +11,23 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.utils
 import edge_tts
+import edge_tts.communicate
 import logging
 import concurrent.futures
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from gradio_client import Client
 logging.basicConfig(level=logging.INFO)
+
+# Since October 2026 Microsoft's legacy speech.platform.bing.com host refuses
+# synthesis with a 403. Edge now synthesizes through api.msedgeservices.com,
+# which accepts the same token. Remove once edge-tts ships this upstream
+# (https://github.com/rany2/edge-tts/pull/491).
+edge_tts.communicate.WSS_URL = (
+    "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1"
+    f"?Ocp-Apim-Subscription-Key={edge_tts.constants.TRUSTED_CLIENT_TOKEN}"
+)
+
 app = Flask(__name__)
 
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
@@ -257,14 +268,30 @@ async def _stream_generate(job: dict, text: str, voice: str, out_path: str) -> N
 
 def _run_job(job_id: str, text: str, voice: str, out_path: str) -> None:
     job = JOBS[job_id]
-    try:
-        asyncio.run(_stream_generate(job, text, voice, out_path))
-    except Exception as exc:
+    last_exc = None
+    for attempt in range(3):
+        try:
+            job["bytes_written"] = 0
+            asyncio.run(_stream_generate(job, text, voice, out_path))
+            last_exc = None
+            break
+        except Exception as exc:
+            last_exc = exc
+            logging.exception("TTS attempt %d failed for job %s", attempt + 1, job_id)
+            if job["cancel_event"].is_set():
+                break
+            time.sleep(2 * (attempt + 1))
+    if last_exc is not None and not job["cancel_event"].is_set():
         job["status"] = "error"
-        job["error"] = (
-            "Couldn't reach the speech service. This tool needs an internet "
-            "connection even though it's free — check your connection and try again."
-        )
+        if "403" in str(last_exc):
+            job["error"] = (
+                "The speech service is temporarily refusing requests from this "
+                "server (HTTP 403). Please try again in a few minutes."
+            )
+        else:
+            job["error"] = (
+                "Couldn't reach the speech service. Please try again in a moment."
+            )
         _cleanup_file(out_path)
         return
 
